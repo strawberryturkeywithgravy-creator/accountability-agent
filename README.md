@@ -24,10 +24,13 @@ If the **goal is NOT completed** by the end of the round, you lose the funds sta
 Funds from unsuccessful goals that round are collected in the "i'll do it tomorrow" pool to be shared among successful "i did it" participants. 
 
 The "i'll do it tomorrow" pool could be split among successful participants a number of ways, including: 
-1. Equal among all participants (={sum of all lost stake that round}/{number of participants in that round})
+1. Rewards split proportional to original stake among participants 
+= {sum of all lost stake that round}*{{winning participants' original stake}/{total stake of all participants}}}
+
 2. Randomly among all participants in that round (this is more technically complex but may be worthwhile to encourage participation and ensure participants don't _feel_ they are "worse off" as more participants join as payouts wouldn't be as direct a reflection of number of round participants)
-OR, in the FUTURE 
-3. It may alternatively be directed to a registered charity, if the participant chooses. 
+OR, in the FUTURE
+
+4. It may alternatively be directed to a registered charity, if the participant chooses. 
 
 ## The Rules
 You can only win funds if you complete your goal. 

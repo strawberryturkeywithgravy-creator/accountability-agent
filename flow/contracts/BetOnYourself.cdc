@@ -14,24 +14,30 @@ access(all) contract BetOnYourself {
     access(all) event ScheduledExecutionReceived(id: UInt64, notes: String?)
     access(all) event ScheduledExecutionErrored(id: UInt64, reason: String)
 
+    // Entitlements
+    // access(all) entitlement join
+    // access(all) entitlement updateCompleted
+
     // Data format you can encode into transactionData when scheduling
     access(all) resource Bet {
 
-        access(all) let participantNotes: {Address: String}
+        access(all) let participantNotes: [{Address: String}]
         access(all) let betVault: @FlowToken.Vault
         access(all) let completed: [Address]
 
-        init(participantNotes: {Address: String}, initialBetVault: @FlowToken.Vault) {
+        init(participantNotes: [{Address: String}], initialBetVault: @FlowToken.Vault) {
             self.participantNotes = participantNotes
             self.betVault <- initialBetVault
             self.completed = []
         }
 
+        // Join bet
+        access(contract) fun joinBet(participant: Address, note: String) {
+            self.participantNotes.append({participant: note})
+        }
+
         // Update completed list
-        access(all) fun updateCompleted(participant: Address) {
-            pre {
-                !self.participantNotes.keys.contains(participant): "Participant not found"
-            }
+        access(contract) fun updateCompleted(participant: Address) {
             self.completed.append(participant)
         }
     }
@@ -56,7 +62,7 @@ access(all) contract BetOnYourself {
             id: UInt64,
             data: AnyStruct?
         ) {
-            pre {
+/*             pre {
                 self.betVault?.balance == self.bet.amount * UFix64(self.bet.participants.length): "Not enough funds to start the bet"
             }
             // Decode input (defensive: tolerate nil/invalid)
@@ -66,7 +72,7 @@ access(all) contract BetOnYourself {
             emit ScheduledExecutionReceived(
                 id: id,
                 notes: bet?.notes
-            )
+            ) */
 
 
         }
@@ -87,10 +93,29 @@ access(all) contract BetOnYourself {
         }
     }
 
-    // Create a fresh handler instance for an account to save and issue a capability from
-    access(all) fun createHandler(amount: UFix64, bet: Bet): @BetHandler {
-        return <- create BetHandler(amount: amount, bet: bet)
+    //
+    ///// PUBLIC FUNCTIONS /////
+    ///
+
+    access(all) fun createBet(participantNotes: [{Address: String}], initialBetVault: @FlowToken.Vault) {
+        let initiator = participantNotes[0].keys[0]
+        let storagePath = StoragePath(identifier: "BetOnYourself_Bet_\(initiator)")!
+        let newBet <- create Bet(participantNotes: participantNotes, initialBetVault: <- initialBetVault)
+        self.account.storage.save(<- newBet, to: storagePath)
     }
+
+    access(all) fun joinBet(initiator: Address, participant: Address, note: String) {
+        let storagePath = StoragePath(identifier: "BetOnYourself_Bet_\(initiator)")!
+        let bet = self.account.storage.borrow<&Bet> (from: storagePath)!
+        bet.joinBet(participant: participant, note: note)
+    }
+
+    // 
+
+    // Create a fresh handler instance for an account to save and issue a capability from
+/*     access(all) fun createHandler(amount: UFix64, bet: Bet): @BetHandler {
+        return <- create BetHandler(amount: amount, bet: bet)
+    } */
 
     init() {
         self.handlerStoragePath = /storage/BetOnYourself_SchedulerHandler

@@ -40,10 +40,41 @@ access(all) contract BetOnYourself {
             
             // If all participants have joined, launch the scheduled bet transaction
             if self.initialBetAmount * UFix64(self.participants.length) == self.betVault.balance {
+                // create a new vault with the amount of the bet
                 let newVault <- self.betVault.withdraw(amount: self.initialBetAmount * UFix64(self.participants.length)) as! @FlowToken.Vault
-                let handler <- BetOnYourself.createHandler(betVault: <- newVault)
+                // estimate the transaction fee
+                let est = FlowTransactionScheduler.estimate(
+                    data: nil,
+                    timestamp: getCurrentBlock().timestamp + 1000.0,
+                    priority: FlowTransactionScheduler.Priority.Medium,
+                    executionEffort: 1000
+                )
+                // assert the estimation is successful
+                assert(
+                    est.timestamp != nil || FlowTransactionScheduler.Priority.Medium == FlowTransactionScheduler.Priority.Low,
+                    message: est.error ?? "estimation failed"
+                )
+                // withdraw the fees from the new vault
+                let fees <- newVault.withdraw(amount: est.flowFee!) as! @FlowToken.Vault
+                // create a new handler
+                let handler <- BetOnYourself.createHandler(betVault: <- newVault, participants: self.participants)
+                // save the handler to storage
                 let storagePath = StoragePath(identifier: "BetOnYourself_Bet_\(self.participants[0])_SchedulerHandler")!
                 BetOnYourself.account.storage.save(<- handler, to: storagePath)
+                // Start loop with a cap to the handler
+                let handlerCap = BetOnYourself.account.capabilities.storage.issue<auth(FlowTransactionScheduler.Execute) &{FlowTransactionScheduler.TransactionHandler}>(storagePath)
+                // Schedule the transaction
+                let receipt <- FlowTransactionScheduler.schedule(
+                    handlerCap: handlerCap,
+                    data: nil,
+                    timestamp: getCurrentBlock().timestamp + 1000.0,
+                    priority: FlowTransactionScheduler.Priority.Medium,
+                    executionEffort: 1000,
+                    fees: <- fees
+                )
+                // save the receipt to storage
+                let storagepath = StoragePath(identifier: "BetOnYourself_Bet_\(self.participants[0])_Receipt")!
+                BetOnYourself.account.storage.save(<- receipt, to: storagepath)
             }
         }
 
@@ -57,30 +88,42 @@ access(all) contract BetOnYourself {
     access(all) resource BetHandler: FlowTransactionScheduler.TransactionHandler {
 
         access(all) let betVault: @FlowToken.Vault
+        access(all) let participants: [Address]
 
 
-        access(all) init(betVault: @FlowToken.Vault) {
+        access(all) init(betVault: @FlowToken.Vault, participants: [Address]) {
 
             self.betVault <- betVault
+            self.participants = participants
            // emit BetHandlerCreated(amount: bet.amount, bet: bet, path: /storage/BetOnYourself_SchedulerHandler)
         }
 
         // Called by scheduler with Execute entitlement
         access(FlowTransactionScheduler.Execute) fun executeTransaction(
             id: UInt64,
-            data: AnyStruct?
+            data: AnyStruct?,
         ) {
-/*             pre {
-                self.betVault?.balance == self.bet.amount * UFix64(self.bet.participants.length): "Not enough funds to start the bet"
+            // get the bet from storage
+            let storagePath = StoragePath(identifier: "BetOnYourself_Bet_\(self.participants[0])")!
+            let bet = BetOnYourself.account.storage.borrow<&Bet>(from: storagePath)!
+            // fetch the list of completed participants
+            let completed = bet.completed
+            // Divide the bet vault by the number of participants
+            let amountPerParticipant = self.betVault.balance / UFix64(self.participants.length)
+            // Distribute the bet vault to the participants
+            for participant in self.participants {
+                let participantVault <- self.betVault.withdraw(amount: amountPerParticipant) as! @FlowToken.Vault
+                // get the user's account and deposit the Flow tokens
+                let userAccount = getAccount(participant)   
+                let userVault = userAccount.capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)!
+                userVault.deposit(from: <- participantVault)
             }
-            // Decode input (defensive: tolerate nil/invalid)
-            let bet = data as? Bet
 
             // At MVP: only emit events so we can verify end-to-end scheduling
             emit ScheduledExecutionReceived(
                 id: id,
-                notes: bet?.notes
-            ) */
+                notes: "Bet completed"
+            ) 
 
 
         }
@@ -121,8 +164,8 @@ access(all) contract BetOnYourself {
     // 
 
     // Create a fresh handler instance for an account to save and issue a capability from
-    access(contract) fun createHandler(betVault: @FlowToken.Vault): @BetHandler {
-        return <- create BetHandler(betVault: <- betVault)
+    access(contract) fun createHandler(betVault: @FlowToken.Vault, participants: [Address]): @BetHandler {
+        return <- create BetHandler(betVault: <- betVault, participants: participants)
     }
 
     init() {

@@ -161,7 +161,61 @@ access(all) contract BetOnYourself {
         bet.joinBet(participant: participant, betVault: <- betVault)
     }
 
-    // 
+    // Public view function to get bet information (required for scripts to access bet data)
+    access(all) fun getBetInfo(initiator: Address): BetInfo? {
+        let storagePath = StoragePath(identifier: "BetOnYourself_Bet_\(initiator)")!
+        if let betRef = self.account.storage.borrow<&Bet>(from: storagePath) {
+            // Copy arrays from the borrowed reference
+            let participants: [Address] = []
+            for participant in betRef.participants {
+                participants.append(participant)
+            }
+            let completed: [Address] = []
+            for participant in betRef.completed {
+                completed.append(participant)
+            }
+            
+            return BetInfo(
+                participants: participants,
+                initialBetAmount: betRef.initialBetAmount,
+                currentBalance: betRef.betVault.balance,
+                completed: completed,
+                totalParticipants: betRef.participants.length,
+                isCompleted: betRef.completed.length == betRef.participants.length,
+                expectedTotalBalance: betRef.initialBetAmount * UFix64(betRef.participants.length)
+            )
+        }
+        return nil
+    }
+
+    // Struct to hold bet information (public for scripts)
+    access(all) struct BetInfo {
+        access(all) let participants: [Address]
+        access(all) let initialBetAmount: UFix64
+        access(all) let currentBalance: UFix64
+        access(all) let completed: [Address]
+        access(all) let totalParticipants: Int
+        access(all) let isCompleted: Bool
+        access(all) let expectedTotalBalance: UFix64
+        
+        init(
+            participants: [Address],
+            initialBetAmount: UFix64,
+            currentBalance: UFix64,
+            completed: [Address],
+            totalParticipants: Int,
+            isCompleted: Bool,
+            expectedTotalBalance: UFix64
+        ) {
+            self.participants = participants
+            self.initialBetAmount = initialBetAmount
+            self.currentBalance = currentBalance
+            self.completed = completed
+            self.totalParticipants = totalParticipants
+            self.isCompleted = isCompleted
+            self.expectedTotalBalance = expectedTotalBalance
+        }
+    }
 
     // Create a fresh handler instance for an account to save and issue a capability from
     access(contract) fun createHandler(betVault: @FlowToken.Vault, participants: [Address]): @BetHandler {

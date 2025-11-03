@@ -21,19 +21,30 @@ access(all) contract BetOnYourself {
     // Data format you can encode into transactionData when scheduling
     access(all) resource Bet {
 
-        access(all) let participantNotes: [{Address: String}]
+        access(all) let participants: [Address]
         access(all) let betVault: @FlowToken.Vault
         access(all) let completed: [Address]
+        access(all) let initialBetAmount: UFix64
 
-        init(participantNotes: [{Address: String}], initialBetVault: @FlowToken.Vault) {
-            self.participantNotes = participantNotes
+        init(participants: [Address], initialBetVault: @FlowToken.Vault) {
+            self.participants = participants
+            self.initialBetAmount = initialBetVault.balance
             self.betVault <- initialBetVault
             self.completed = []
         }
 
         // Join bet
-        access(contract) fun joinBet(participant: Address, note: String) {
-            self.participantNotes.append({participant: note})
+        access(contract) fun joinBet(participant: Address, betVault: @FlowToken.Vault) {
+            self.participants.append(participant)
+            self.betVault.deposit(from: <- betVault)
+            
+            // If all participants have joined, launch the scheduled bet transaction
+            if self.initialBetAmount * UFix64(self.participants.length) == self.betVault.balance {
+                let newVault <- self.betVault.withdraw(amount: self.initialBetAmount * UFix64(self.participants.length)) as! @FlowToken.Vault
+                let handler <- BetOnYourself.createHandler(betVault: <- newVault)
+                let storagePath = StoragePath(identifier: "BetOnYourself_Bet_\(self.participants[0])_SchedulerHandler")!
+                BetOnYourself.account.storage.save(<- handler, to: storagePath)
+            }
         }
 
         // Update completed list
@@ -45,15 +56,12 @@ access(all) contract BetOnYourself {
     // The resource that will be called by the scheduler
     access(all) resource BetHandler: FlowTransactionScheduler.TransactionHandler {
 
-        access(all) var betters: {Address: Bool}
-        access(all) let betVault: @FlowToken.Vault?
+        access(all) let betVault: @FlowToken.Vault
 
-        access(all) init( roundID: UInt64, inittialBetVault: @FlowToken.Vault) {
 
-            self.betVault <- inittialBetVault
- 
-            self.betters = {}
+        access(all) init(betVault: @FlowToken.Vault) {
 
+            self.betVault <- betVault
            // emit BetHandlerCreated(amount: bet.amount, bet: bet, path: /storage/BetOnYourself_SchedulerHandler)
         }
 
@@ -97,25 +105,25 @@ access(all) contract BetOnYourself {
     ///// PUBLIC FUNCTIONS /////
     ///
 
-    access(all) fun createBet(participantNotes: [{Address: String}], initialBetVault: @FlowToken.Vault) {
-        let initiator = participantNotes[0].keys[0]
+    access(all) fun createBet(participants: [Address], initialBetVault: @FlowToken.Vault) {
+        let initiator = participants[0]
         let storagePath = StoragePath(identifier: "BetOnYourself_Bet_\(initiator)")!
-        let newBet <- create Bet(participantNotes: participantNotes, initialBetVault: <- initialBetVault)
+        let newBet <- create Bet(participants: participants, initialBetVault: <- initialBetVault)
         self.account.storage.save(<- newBet, to: storagePath)
     }
 
-    access(all) fun joinBet(initiator: Address, participant: Address, note: String) {
+    access(all) fun joinBet(initiator: Address, participant: Address, betVault: @FlowToken.Vault) {
         let storagePath = StoragePath(identifier: "BetOnYourself_Bet_\(initiator)")!
         let bet = self.account.storage.borrow<&Bet> (from: storagePath)!
-        bet.joinBet(participant: participant, note: note)
+        bet.joinBet(participant: participant, betVault: <- betVault)
     }
 
     // 
 
     // Create a fresh handler instance for an account to save and issue a capability from
-/*     access(all) fun createHandler(amount: UFix64, bet: Bet): @BetHandler {
-        return <- create BetHandler(amount: amount, bet: bet)
-    } */
+    access(contract) fun createHandler(betVault: @FlowToken.Vault): @BetHandler {
+        return <- create BetHandler(betVault: <- betVault)
+    }
 
     init() {
         self.handlerStoragePath = /storage/BetOnYourself_SchedulerHandler

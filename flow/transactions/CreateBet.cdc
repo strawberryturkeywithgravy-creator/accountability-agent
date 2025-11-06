@@ -5,9 +5,11 @@ import "FungibleToken"
 /// Transaction to create a new bet
 /// The first participant in the participants array is the initiator
 /// The initialBetAmount is the amount each participant must contribute
+/// durationSeconds is the time in seconds until the scheduled transaction executes
 transaction(
     participants: [Address],
-    betAmount: UFix64
+    betAmount: UFix64,
+    durationSeconds: UFix64
 ) {
     prepare(signer: auth(Storage) &Account) {
         // Validate that the signer is the first participant (initiator)
@@ -31,12 +33,9 @@ transaction(
         // Create the bet
         BetOnYourself.createBet(
             participants: participants,
-            initialBetVault: <-initialBetVault
+            initialBetVault: <-initialBetVault,
+            durationSeconds: durationSeconds
         )
-        
-        log("Bet created with initiator: ".concat(participants[0].toString()))
-        log("Total participants: ".concat(participants.length.toString()))
-        log("Bet amount per participant: ".concat(betAmount.toString()))
     }
 }
 

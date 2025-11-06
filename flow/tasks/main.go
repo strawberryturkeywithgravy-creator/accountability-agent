@@ -27,10 +27,12 @@ func main() {
 	// Test BetOnYourself functionality
 	color.Green("Creating a bet with account as initiator")
 	// Use account names - overflow will convert them to addresses
+	// durationSeconds: 86400 = 1 day (24 hours * 60 minutes * 60 seconds)
 	o.Tx("CreateBet",
 		WithSigner("account"),
 		WithAddresses("participants", "account", "bob"),
 		WithArg("betAmount", "1.0"),
+		WithArg("durationSeconds", "86400.0"),
 	)
 
 	// Get bet info after creation

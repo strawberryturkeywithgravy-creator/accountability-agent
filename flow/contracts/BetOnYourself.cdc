@@ -25,12 +25,14 @@ access(all) contract BetOnYourself {
         access(all) let betVault: @FlowToken.Vault
         access(all) let completed: [Address]
         access(all) let initialBetAmount: UFix64
+        access(all) let durationSeconds: UFix64
 
-        init(participants: [Address], initialBetVault: @FlowToken.Vault) {
+        init(participants: [Address], initialBetVault: @FlowToken.Vault, durationSeconds: UFix64) {
             self.participants = participants
             self.initialBetAmount = initialBetVault.balance
             self.betVault <- initialBetVault
             self.completed = []
+            self.durationSeconds = durationSeconds
         }
 
         // Join bet
@@ -42,10 +44,12 @@ access(all) contract BetOnYourself {
             if self.initialBetAmount * UFix64(self.participants.length) == self.betVault.balance {
                 // create a new vault with the amount of the bet
                 let newVault <- self.betVault.withdraw(amount: self.initialBetAmount * UFix64(self.participants.length)) as! @FlowToken.Vault
+                // calculate the target timestamp using the duration
+                let targetTimestamp = getCurrentBlock().timestamp + self.durationSeconds
                 // estimate the transaction fee
                 let est = FlowTransactionScheduler.estimate(
                     data: nil,
-                    timestamp: getCurrentBlock().timestamp + 1000.0,
+                    timestamp: targetTimestamp,
                     priority: FlowTransactionScheduler.Priority.Medium,
                     executionEffort: 1000
                 )
@@ -67,7 +71,7 @@ access(all) contract BetOnYourself {
                 let receipt <- FlowTransactionScheduler.schedule(
                     handlerCap: handlerCap,
                     data: nil,
-                    timestamp: getCurrentBlock().timestamp + 1000.0,
+                    timestamp: targetTimestamp,
                     priority: FlowTransactionScheduler.Priority.Medium,
                     executionEffort: 1000,
                     fees: <- fees
@@ -148,10 +152,10 @@ access(all) contract BetOnYourself {
     ///// PUBLIC FUNCTIONS /////
     ///
 
-    access(all) fun createBet(participants: [Address], initialBetVault: @FlowToken.Vault) {
+    access(all) fun createBet(participants: [Address], initialBetVault: @FlowToken.Vault, durationSeconds: UFix64) {
         let initiator = participants[0]
         let storagePath = StoragePath(identifier: "BetOnYourself_Bet_\(initiator)")!
-        let newBet <- create Bet(participants: participants, initialBetVault: <- initialBetVault)
+        let newBet <- create Bet(participants: participants, initialBetVault: <- initialBetVault, durationSeconds: durationSeconds)
         self.account.storage.save(<- newBet, to: storagePath)
     }
 
@@ -182,7 +186,8 @@ access(all) contract BetOnYourself {
                 completed: completed,
                 totalParticipants: betRef.participants.length,
                 isCompleted: betRef.completed.length == betRef.participants.length,
-                expectedTotalBalance: betRef.initialBetAmount * UFix64(betRef.participants.length)
+                expectedTotalBalance: betRef.initialBetAmount * UFix64(betRef.participants.length),
+                durationSeconds: betRef.durationSeconds
             )
         }
         return nil
@@ -197,6 +202,7 @@ access(all) contract BetOnYourself {
         access(all) let totalParticipants: Int
         access(all) let isCompleted: Bool
         access(all) let expectedTotalBalance: UFix64
+        access(all) let durationSeconds: UFix64
         
         init(
             participants: [Address],
@@ -205,7 +211,8 @@ access(all) contract BetOnYourself {
             completed: [Address],
             totalParticipants: Int,
             isCompleted: Bool,
-            expectedTotalBalance: UFix64
+            expectedTotalBalance: UFix64,
+            durationSeconds: UFix64
         ) {
             self.participants = participants
             self.initialBetAmount = initialBetAmount
@@ -214,6 +221,7 @@ access(all) contract BetOnYourself {
             self.totalParticipants = totalParticipants
             self.isCompleted = isCompleted
             self.expectedTotalBalance = expectedTotalBalance
+            self.durationSeconds = durationSeconds
         }
     }
 

@@ -30,7 +30,7 @@ func main() {
 	o.Tx("CreateBet",
 		WithSigner("account"),
 		WithAddresses("participants", "account", "bob"),
-		WithArg("betAmount", "10.0"),
+		WithArg("betAmount", "1.0"),
 	)
 
 	// Get bet info after creation
@@ -44,7 +44,7 @@ func main() {
 	o.Tx("JoinBet",
 		WithSigner("bob"),
 		WithArg("initiator", "account"),
-		WithArg("betAmount", "10.0"),
+		WithArg("betAmount", "1.0"),
 	)
 
 	// Get bet info after bob joins

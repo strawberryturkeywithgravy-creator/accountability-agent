@@ -128,7 +128,8 @@
 		"emulator": {
 			"emulator-account": [
 				"BetOnYourself"
-			]
+			],
+			"emulator-bob": []
 		}
 	}
 }
